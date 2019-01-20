@@ -1,0 +1,213 @@
+# Parts of this taken from http://www.appliednsm.com/wp-content/uploads/logstash-SObro22-parse.conf_.txt
+
+# This config is purpose built to only deal with dns.log, and also the notice and dhcp log, just because
+
+input {
+
+  file {
+    type => "BRO_noticelog"
+    path => "/var/spool/bro/bro/notice.log"
+  }
+
+  file {
+    type => "BRO_connectlog"
+    path => "/var/spool/bro/bro/conn.log"
+  }
+
+    
+  file {
+    type => "BRO_dnslog"
+    path => "/var/spool/bro/bro/dns.log"
+  }
+
+  file {
+    type => "BRO_dhcplog"
+    path => "/var/spool/bro/bro/dhcp.log"
+  }
+}
+
+filter {
+  if [message] =~ /^#/ {
+    drop {  }
+  }
+  else {
+    # BRO_noticelog ######################
+      if [type] == "BRO_noticelog" {
+        grok { 
+          patterns_dir => "/var/lib/logstash/patterns"
+          match => [ "message", "%{BROTIME:timestamp}\t%{NOTSPACE:uid}\t%{NOTSPACE:orig_h}\t%{NOTSPACE:orig_p}\t%{NOTSPACE:resp_h}\t%{NOTSPACE:resp_p}\t%{NOTSPACE:fuid}\t%{NOTSPACE:file_mime_type}\t%{NOTSPACE:file_desc}\t%{NOTSPACE:proto}\t%{NOTSPACE:note}\t%{SUBJECT:msg}\t%{SUBJECT:sub}\t%{NOTSPACE:src}\t%{NOTSPACE:dst}\t%{NOTSPACE:p}\t%{NOTSPACE:n}\t%{WORD:peer_descr}\t%{NOTSPACE:actions}\t%{BASE16FLOAT:suppress_for}\t%{WORD:dropped}.*" ]
+        }
+      }
+    
+    
+    # BRO_dhcplog ######################
+      if [type] == "BRO_dhcplog" {
+        grok { 
+          patterns_dir => "/var/lib/logstash/patterns"
+          match => [ "message", "%{BROTIME:timestamp}\t%{USERNAME:uid}\t%{IP:orig_h}\t%{INT:orig_p}\t%{IP:resp_h}\t%{INT:resp_p}\t%{COMMONMAC:mac}\t%{IP:assigned_ip}\t%{BASE16FLOAT:lease_time}\t%{INT:trans_id}" ]
+        }
+      }
+    
+    # BRO_dnslog ######################
+      if [type] == "BRO_dnslog" {
+        grok {
+          patterns_dir => "/var/lib/logstash/patterns"
+          match => [ "message", "%{BROTIME:timestamp}\t%{USERNAME:uid}\t%{IP:orig_h}\t%{INT:orig_p}\t%{IP:resp_h}\t%{INT:resp_p}\t%{WORD:proto}\t%{INT:trans_id}\t%{NOTSPACE:rtt}\t%{ANSWERS:query}\t%{NOTSPACE:qclass}\t%{NOTSPACE:qclass_name}\t%{NOTSPACE:qtype}\t%{NOTSPACE:qtype_name}\t%{NOTSPACE:rcode}\t%{NOTSPACE:rcode_name}\t%{WORD:AA}\t%{WORD:TC}\t%{WORD:RD}\t%{WORD:RA}\t%{WORD:Z}\t%{ANSWERS:answers}\t%{NOTSPACE:TTLs}\t%{WORD:rejected}" ]
+        }
+
+      }
+  }
+
+  if [type] == "BRO_connectlog" {
+    grok {
+      patterns_dir => "/var/lib/logstash/patterns"
+      match => [ "message", "%{BROTIME:timestamp}\t%{USERNAME:uid}\t%{IP:orig_h}\t%{INT:orig_p}\t%{IP:resp_h}\t%{INT:resp_p}\t%{WORD:proto}\t%{NOTSPACE:service}\t%{MAYBENUM:duration}\t%{MAYBENUM:orig_bytes}\t%{MAYBENUM:resp_bytes}\t%{WORD:conn_state}\t%{WORD:local_orig}\t%{WORD:local_resp}\t%{INT:missed_bytes}\t%{NOTSPACE:history}\t%{INT:orig_pkts}\t%{INT:orig_ip_bytes}\t%{INT:resp_pkts}\t%{INT:resp_ip_bytes}\t%{DATA:tunnel_parents}\t%{NOTSPACE:orig_mac}\t%{NOTSPACE:resp_mac}" ]
+    }
+  }  
+
+  date {
+    match => [ "timestamp", "UNIX" ]
+    target => "@timestamp"
+  }
+}
+
+filter {
+}
+
+filter {
+  if "BRO" in [type] {
+   # if [id.orig_h] {
+   #   mutate {
+   #     add_field => [ "senderbase_lookup", "http://www.senderbase.org/lookup/?search_string=%{orig_h}" ]
+   #     add_field => [ "CBL_lookup", "http://cbl.abuseat.org/lookup.cgi?ip=%{orig_h}" ]
+   #     add_field => [ "Spamhaus_lookup", "http://www.spamhaus.org/query/bl?ip=%{orig_h}" ]
+   #   }
+   # }
+    mutate {
+      add_tag => [ "BRO" ]
+    }
+    mutate {
+      convert => [ "orig_bytes", "integer" ]
+      convert => [ "resp_bytes", "integer" ]
+      convert => [ "missed_bytes", "integer" ]
+      convert => [ "orig_pkts", "integer" ]
+      convert => [ "orig_ip_bytes", "integer" ]
+      convert => [ "resp_pkts", "integer" ]
+      convert => [ "resp_ip_bytes", "integer" ]
+      convert => [ "micros", "integer" ]
+    }
+    if [orig_h] =~ /[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/ {
+      mutate {
+        add_field => { "ip_ver" => "4" }
+      }
+    } else {
+      mutate {
+        add_field => { "ip_ver" => "6" }
+      }
+    }
+    if [type] == "BRO_dnslog" {
+    	if [resp_h] == "10.10.10.15" or [orig_h] == "10.10.10.15" {
+            drop {  }
+    	}
+    }
+    if [type] == "BRO_connectlog" and [proto] == "udp" {
+        if [orig_p] == "53" or [resp_p] == "53" or [resp_p] == "5353" or [orig_p] == "5353" {
+            drop { }
+        }
+    }
+  }
+}
+
+filter {
+  if [type] == "BRO_connectlog" {
+    #The following makes use of the translate filter (logstash contrib) to convert conn_state into human text. Saves having to look up values for packet introspection
+    translate {                                                                                                                                                     field => "conn_state"                                                                                                                                         destination => "conn_state_full"                                                                                                                              dictionary => [
+        "S0", "Connection attempt seen, no reply",                                                                                                                    "S1", "Connection established, not terminated",
+        "S2", "Connection established and close attempt by originator seen (but no reply from responder)",
+        "S3", "Connection established and close attempt by responder seen (but no reply from originator)",
+        "SF", "Normal SYN/FIN completion",
+        "REJ", "Connection attempt rejected",
+        "RSTO", "Connection established, originator aborted (sent a RST)",
+        "RSTR", "Established, responder aborted",                                                                                                                     "RSTOS0", "Originator sent a SYN followed by a RST, we never saw a SYN-ACK from the responder",                                                               "RSTRH", "Responder sent a SYN ACK followed by a RST, we never saw a SYN from the (purported) originator",                                                    "SH", "Originator sent a SYN followed by a FIN, we never saw a SYN ACK from the responder (hence the connection was 'half' open)",                            "SHR", "Responder sent a SYN ACK followed by a FIN, we never saw a SYN from the originator",
+        "OTH", "No SYN seen, just midstream traffic (a 'partial connection' that was not later closed)"
+      ]
+    }
+
+    mutate {
+        add_field => { "total_bytes" => "" }
+        add_field => { "total_pkts" => "" }
+        convert => { "total_bytes" => "integer" }
+        convert => { "total_pkts" => "integer" }
+    }
+
+    ruby {
+        code => "
+          resp_bytes = event.get('resp_bytes')
+          orig_bytes = event.get('orig_bytes')
+          total_bytes = resp_bytes + orig_bytes
+          event.set('total_bytes', total_bytes)
+          resp_pkts = event.get('resp_pkts')
+          orig_pkts = event.get('orig_pkts')
+          total_pkts = resp_pkts + orig_pkts
+          event.set('total_pkts', total_pkts)
+                "
+    }
+
+    if "_grokparsefailure" not in [tags] {
+        mutate {
+            remove_field => [ 'message' ]
+        }
+    }
+    
+  }
+}
+
+filter {
+    if [type] == "BRO_dnslog" {
+        if [query] == '-' {
+            drop { }
+        }
+        if [answers] == '-' {
+            mutate {
+                remove_field => [ 'answers' ]
+            }
+        }
+        if [rcode] == '-' {
+            mutate {
+                remove_field => [ 'rcode', 'rcode_name' ]
+            }
+        }
+        mutate {
+            add_field => { "TLD" => "" }
+            add_field => { "parent_domain" => "" }
+        }
+        ruby {
+            code => "
+	      if ( event.get('query').split('.').slice(-2, 2) != nil)
+              	event.set('parent_domain', event.get('query').split('.').slice(-2, 2).join('.'))
+                event.set('TLD', event.get('query').split('.')[-1])
+	      else
+                event.remove('TLD')
+                event.remove('parent_domain')
+              end
+            "
+        }
+        if "_grokparsefailure" not in [tags] {
+            mutate {
+                remove_field => [ 'message' ]
+            }
+        }
+    }
+}
+
+filter {
+}
+
+output {
+  elasticsearch {
+      hosts => ['192.168.42.6']
+      template_overwrite => false
+#    manage_template => true
+#    template => "/opt/logstash/lib/logstash/outputs/elasticsearch/elasticsearch-template.json"
+  }
+}

@@ -1,0 +1,145 @@
+input {
+
+  file {
+    path => "/var/log/remotes/pf/pf.log"
+    type => "pflogs"
+  }
+
+  file {
+    path => "/var/log/remotes/pf/pfsense.log"
+    type => "pfsensesyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/dockerdude/dockerdude.log"
+    type => "dockerdudesyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/repository/repository.log"
+    type => "repositorysyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/atlantis/atlantis.log"
+    type => "atlantissyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/noisydude/noisydude.log"
+    codec => multiline {
+      pattern => "]:\s\s\s\s\s"
+      what => "previous"
+    }
+    type => "noisydudesyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/dockerpi/dockerpi.log"
+    type => "dockerpisyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/pihole/pihole.log"
+    type => "piholesyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/ddwrt/ddwrt.log"
+    type => "ddwrtsyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/switch/switch.log"
+    type => "switchsyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/jenkins/jenkins.log"
+    type => "jenkinssyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/beehyve/beehyve.log"
+    type => "beehyvesyslog"
+  }
+
+  file {
+    path => "/var/log/remotes/bitchssh/bitchssh.log"
+    type => "bitchsshsyslog"
+  }
+
+  file {
+    path => [ "/var/log/syslog", "/var/log/auth.log", "/var/log/kern.log" ]
+    type => "loggersyslog"
+  }
+
+}
+
+filter {
+    if [type] == 'switchsyslog' {
+        grok {
+            match => [
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{YEAR}-%{MONTHNUM}-%{MONTHDAY} %{HOUR}: %{MINUTE}:%{SECOND} %{SYSLOGHOST:logsource} %{SYSLOGPROG} The switch has learned a new MAC address %{MAC:mac}, vid:%{NUMBER:vid}, interface:port %{NUMBER:port}",
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{YEAR}-%{MONTHNUM}-%{MONTHDAY} %{HOUR}: %{MINUTE}:%{SECOND} %{SYSLOGHOST:logsource} %{SYSLOGPROG} %{GREEDYDATA:message}"
+            ]
+        }
+        mutate {
+            replace => { "logsource" => "switch" }
+        }
+    }
+    else if [type] == 'pflogs' {
+        grok {
+            patterns_dir => ["/var/lib/logstash/patterns"]
+            match => [
+                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLOGPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{PROTOCOL_DATA}",
+                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLOGPROG}: %{LOG_DATA}%{BASE16NUM:class},%{DATA:flow_label},1,%{PIM:proto}.+?%{IP_DATA}",
+                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLOGPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{HBH}"
+            ]
+        }
+        geoip {
+            source => "src_ip"
+            target => "geoip"
+            database => "/etc/logstash/GeoLite2-City.mmdb"
+            add_field => [ "[geoip][coordinates]", "%{[geoip][longitude]}" ]
+            add_field => [ "[geoip][coordinates]", "%{[geoip][latitude]}"  ]
+        }
+        mutate {
+            convert => [ "[geoip][coordinates]", "float"]
+        }
+        if !([geoip][city_name]) and [geoip][country_name] {
+            mutate {
+               add_field => { "[geoip][city_name]" => "%{[geoip][country_name]}" }
+            }
+        }
+    }
+    else {
+        grok {
+            patterns_dir => ["/var/lib/logstash/patterns/"]
+            match => [
+                "message" , "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource}\s+%{SYSLOGPROG}: %{GREEDYDATA:message}",
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} last message repeated %{INT} times",
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource}\s+%{ANACRON:message}"
+            ]
+            overwrite => [ "message" ]
+        }
+    }
+
+    date {
+        match => ["real_timestamp", "ISO8601"]
+        target => "@timestamp"
+    }
+}
+
+filter {
+    mutate {
+        lowercase => [ "proto" ]
+    }
+}
+
+output {
+  elasticsearch {
+    hosts => [ '192.168.42.6' ]
+  }
+  #stdout { }
+}

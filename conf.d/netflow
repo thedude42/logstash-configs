@@ -1,0 +1,18 @@
+input {
+  udp {
+    port                 => 2055
+    codec                => netflow
+    receive_buffer_bytes => 16777216
+    workers              => 16
+    type                 => "netflow"
+  }
+}
+
+
+output {
+  elasticsearch {
+    hosts => ['192.168.42.6']
+    template_overwrite => true
+  }
+  stdout { codec => rubydebug }
+}
