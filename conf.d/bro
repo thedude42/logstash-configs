@@ -107,6 +107,7 @@ filter {
       convert => [ "resp_pkts", "integer" ]
       convert => [ "resp_ip_bytes", "integer" ]
       convert => [ "micros", "integer" ]
+      convert => [ "seconds", "integer" ]
     }
     if [orig_h] =~ /[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/ {
       mutate {
