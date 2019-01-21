@@ -5,6 +5,11 @@
 input {
 
   file {
+    type => "BRO_statslog"
+    path => "/var/spool/bro/bro/stats.log"
+  }
+
+  file {
     type => "BRO_noticelog"
     path => "/var/spool/bro/bro/notice.log"
   }
