@@ -177,7 +177,6 @@ filter {
 filter {
   if [type] == "BRO_statslog" {
     mutate {
-      convert => [ "peer", "integer" ]
       convert => [ "mem", "integer" ]
       convert => [ "pkts_proc", "integer" ]
       convert => [ "bytes_recv", "integer" ]
