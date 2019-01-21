@@ -16,7 +16,7 @@ Logstash configs targeting specific software
 
 - Logstash inputs are for default broctl.cfg settings `LogDir = /var/log/bro` and `SpoolDir = /var/spool/bro`. The grok patterns are complete for conn.log, dns.log and dhcp.log. The file notice.log is incomplete (gets occasional \_grokparsefailure errors).
 
-**TODO** need to do grok patterns for stats.log, ssl.log and x509.log. http.log and smtp.log is less interesting these days
+**TODO** need to do grok patterns for ssl.log and x509.log. For files http.log and smtp.log, these are less interesting these days
 
 #### netflow
 

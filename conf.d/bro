@@ -31,6 +31,14 @@ filter {
     drop {  }
   }
   else {
+    # BRO_statslog  ######################
+      if [type] == "BRO_statslog" {
+        grok {
+          patterns_dir => "/var/lib/logstash/patterns"
+          match => [ "message", "%{BROTIME:timestamp}\t%{WORD:peer}\t%{INT:mem}\t%{INT:pkts_proc}\t%{INT:bytes_recv}\t%{INT:pkts_dropped}\t%{INT:pkts_link}\t%{BASE16FLOAT:pkt_lag}\t%{INT:events_proc}\t%{INT:events_queued}\t%{INT:active_tcp_conns}\t%{INT:active_udp_conns}\t%{INT:active_icmp_conns}\t%{INT:tcp_conns}\t%{INT:udp_conns}\t%{INT:icmp_conns}\t%{INT:timers}\t%{INT:active_timers}\t%{INT:files}\t%{INT:active_files}\t%{INT:dns_requests}\t%{INT:active_dns_requests}\t%{INT:reassem_tcp_size}\t%{INT:reassem_file_size}\t%{INT:reassem_frag_size}\t%{INT:reassem_unknown_size}" ]
+        }
+      }
+
     # BRO_noticelog ######################
       if [type] == "BRO_noticelog" {
         grok { 
@@ -38,7 +46,6 @@ filter {
           match => [ "message", "%{BROTIME:timestamp}\t%{NOTSPACE:uid}\t%{NOTSPACE:orig_h}\t%{NOTSPACE:orig_p}\t%{NOTSPACE:resp_h}\t%{NOTSPACE:resp_p}\t%{NOTSPACE:fuid}\t%{NOTSPACE:file_mime_type}\t%{NOTSPACE:file_desc}\t%{NOTSPACE:proto}\t%{NOTSPACE:note}\t%{SUBJECT:msg}\t%{SUBJECT:sub}\t%{NOTSPACE:src}\t%{NOTSPACE:dst}\t%{NOTSPACE:p}\t%{NOTSPACE:n}\t%{WORD:peer_descr}\t%{NOTSPACE:actions}\t%{BASE16FLOAT:suppress_for}\t%{WORD:dropped}.*" ]
         }
       }
-    
     
     # BRO_dhcplog ######################
       if [type] == "BRO_dhcplog" {
