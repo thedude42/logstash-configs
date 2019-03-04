@@ -29,6 +29,11 @@ input {
     type => "BRO_dhcplog"
     path => "/var/spool/bro/bro/dhcp.log"
   }
+  
+  file {
+    type => "BRO_ssllog"
+    path => "/var/spool/bro/bro/ssl.log"
+  }
 }
 
 filter {
@@ -76,6 +81,13 @@ filter {
       match => [ "message", "%{BROTIME:timestamp}\t%{USERNAME:uid}\t%{IP:orig_h}\t%{INT:orig_p}\t%{IP:resp_h}\t%{INT:resp_p}\t%{WORD:proto}\t%{NOTSPACE:service}\t%{MAYBENUM:duration}\t%{MAYBENUM:orig_bytes}\t%{MAYBENUM:resp_bytes}\t%{WORD:conn_state}\t%{WORD:local_orig}\t%{WORD:local_resp}\t%{INT:missed_bytes}\t%{NOTSPACE:history}\t%{INT:orig_pkts}\t%{INT:orig_ip_bytes}\t%{INT:resp_pkts}\t%{INT:resp_ip_bytes}\t%{DATA:tunnel_parents}\t%{NOTSPACE:orig_mac}\t%{NOTSPACE:resp_mac}" ]
     }
   }  
+
+  if [type] == "BRO_ssllog" {
+    grok {
+      patterns_dir => "/var/lib/logstash/patterns"
+      match => [ "message", "%{BROTIME:timestamp}\t%{USERNAME:uid}\t%{IP:orig_h}\t%{INT:orig_p}\t%{IP:resp_h}\t%{INT:resp_p}\t%{WORD:tlsver}\t%{WORD:cipher_suite}\t%{DATA:curve}\t%{NOTTAB:server_name}\t%{WORD:resumed}\t%{DATA:last_alert}\t%{DATA:next_protocol}\t%{WORD:established}\t%{DATA:cert_chain_fuids}\t%{NOTTAB:client_cert_chain_fuids}\t%{NOTTAB:subject}\t%{NOTTAB:issuer}\t%{NOTTAB:client_subject}\t%{NOTTAB:client_issuer}\t%{WORD:validation_status}" ]
+    }
+  }
 
   date {
     match => [ "timestamp", "UNIX" ]

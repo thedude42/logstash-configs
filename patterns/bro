@@ -1,0 +1,13 @@
+HOST_SET (%{IP}+)
+
+SUBJECT ([*a-zA-Z0-9=. ,-]+|-)
+
+MAYBENUM (%{BASE16FLOAT}|-)
+
+STUFFANDSPACES [a-zA-Z0-9;()/_\-. ,<>=]+
+
+ANSWERS [^      ]+
+
+BROTIME (%{INT:seconds}\.%{INT:micros})
+
+NOTTAB [^\t]+
