@@ -28,9 +28,11 @@ filter {
     if [type] == 'switchsyslog' {
         grok {
             match => [
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %%{DATA:category}: %{GREEDYDATA:message}",
                 "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{YEAR}-%{MONTHNUM}-%{MONTHDAY} %{HOUR}: %{MINUTE}:%{SECOND} %{SYSLOGHOST:logsource} %{SYSLOGPROG} The switch has learned a new MAC address %{MAC:mac}, vid:%{NUMBER:vid}, interface:port %{NUMBER:port}",
                 "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{YEAR}-%{MONTHNUM}-%{MONTHDAY} %{HOUR}: %{MINUTE}:%{SECOND} %{SYSLOGHOST:logsource} %{SYSLOGPROG} %{GREEDYDATA:message}"
             ]
+            overwrite => [ "message" ]
         }
         mutate {
             replace => { "logsource" => "switch" }
@@ -40,12 +42,9 @@ filter {
         grok {
             patterns_dir => ["/var/lib/logstash/patterns"]
             match => [
-                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLO
-GPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{PROTOCOL_DATA}",
-                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLO
-GPROG}: %{LOG_DATA}%{BASE16NUM:class},%{DATA:flow_label},1,%{PIM:proto}.+?%{IP_DATA}",
-                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLO
-GPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{HBH}"
+                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLOGPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{PROTOCOL_DATA}",
+                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLOGPROG}: %{LOG_DATA}%{BASE16NUM:class},%{DATA:flow_label},1,%{PIM:proto}.+?%{IP_DATA}",
+                "message", "%{TIMESTAMP_ISO8601:real_timestamp} %{DATA:logsource} %{SYSLOGPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{HBH}"
             ]
         }
         geoip {
@@ -64,13 +63,28 @@ GPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{HBH}"
             }
         }
     }
+    else if [type] == 'apaclite-1syslog' {
+        grok {
+            patterns_dir => ["/var/lib/logstash/patterns"]
+            match => [
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource} %{DATA:firmwarever}: %{SYSLOGPROG}: wevent.%{DATA:funcname}: %{WORD:eventname}: event_id: %{INT:event_id} event_type: %{DATA:event_type} vap: %{WORD:vap} sta_mac: %{DATA:mac} auth_ts: %{BASE10NUM:auth_ts} auth_delta: %{INT:auth_delta} assoc_delta: %{INT:assoc_delta} wpa_auth_delta: %{INT:wpa_auth_delta} radius_auth_delta: %{INT:radius_auth_delta} radius_auth_status: %{DATA:radius_auth_status} ip_delta: %{INT:ip_delta} disassoc_count: %{INT:disassoc_count} ip_assign_type: %{DATA:ip_assign_type} auth_failures: %{INT:auth_failures} assoc_failures: %{INT:assoc_failures} wpa_auth_failures: %{INT:wpa_auth_failures} ip_failures: %{INT:ip_failures} acl_status: %{DATA:acl_status} arp_status: %{DATA:arp_status} dns%{NOTSPACE}%{NOTCOLON:dns_status}",
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource} %{DATA:firmwarever}: %{SYSLOGPROG}: %{WORD:vap}: STA %{DATA:mac} %{GREEDYDATA:message}",
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource} %{DATA:firmwarever}: %{SYSLOGPROG}: %{GREEDYDATA:message}",
+                "message",
+            ]
+            overwrite => [ "message" ]
+        }
+    }
     else {
         grok {
             patterns_dir => ["/var/lib/logstash/patterns/"]
             match => [
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource}\s+%{MONTH:extramonth} %{MONTHDAY:extraday} %{TIME:extratime} %{SYSLOGPROG}: %{GREEDYDATA:message}",
+                "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource}\s+%{COREDNSPROG}: %{COREDNSLOG}",
                 "message" , "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource}\s+%{SYSLOGPROG}: %{GREEDYDATA:message}",
                 "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} last message repeated %{INT} times",
                 "message", "(?m)%{TIMESTAMP_ISO8601:real_timestamp} %{SYSLOGHOST:logsource}\s+%{ANACRON:message}"
+                
             ]
             overwrite => [ "message" ]
         }
@@ -85,6 +99,12 @@ GPROG}: %{LOG_DATA}%{IP_SPECIFIC_DATA}%{IP_DATA}%{HBH}"
 filter {
     mutate {
         lowercase => [ "proto" ]
+    }
+    mutate {
+        convert => [ "qresp_size" , "integer" ]
+        convert => [ "query_duration" , "float" ]
+        convert => [ "qbuff_size" , "integer" ]
+        convert => [ "qsize" , "integer" ]
     }
 }
 
